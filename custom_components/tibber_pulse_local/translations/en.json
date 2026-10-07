@@ -1,0 +1,89 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "description": "Connect to a Tibber bridge on your network. It streams the readings its parser module decodes from your Pulse meters.",
+        "data": {
+          "host": "Host",
+          "password": "Password"
+        },
+        "data_description": {
+          "host": "The bridge's IP address or host name.",
+          "password": "The bridge's web password: the code on its QR label, like ABCD-1234."
+        }
+      },
+      "zeroconf_confirm": {
+        "description": "A Tibber bridge was found at {host}. Enter its web password to add it.",
+        "data": {
+          "password": "Password"
+        },
+        "data_description": {
+          "password": "The code on the bridge's QR label, like ABCD-1234."
+        }
+      },
+      "reauth_confirm": {
+        "description": "The bridge at {host} no longer accepts the password. Enter the current one.",
+        "data": {
+          "password": "Password"
+        },
+        "data_description": {
+          "password": "The code on the bridge's QR label, like ABCD-1234."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid authentication",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "Device is already configured",
+      "not_tibber_bridge": "Not a Tibber bridge",
+      "reauth_successful": "Re-authentication was successful"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "power": {
+        "name": "Power"
+      },
+      "power_import": {
+        "name": "Power import"
+      },
+      "power_export": {
+        "name": "Power export"
+      },
+      "power_phase": {
+        "name": "Power {phase}"
+      },
+      "voltage_phase": {
+        "name": "Voltage {phase}"
+      },
+      "current_phase": {
+        "name": "Current {phase}"
+      },
+      "frequency": {
+        "name": "Frequency"
+      },
+      "reactive_power_import": {
+        "name": "Reactive power import"
+      },
+      "reactive_power_export": {
+        "name": "Reactive power export"
+      },
+      "energy_import": {
+        "name": "Energy import"
+      },
+      "energy_export": {
+        "name": "Energy export"
+      },
+      "reactive_energy_import": {
+        "name": "Reactive energy import"
+      },
+      "reactive_energy_export": {
+        "name": "Reactive energy export"
+      }
+    }
+  }
+}
