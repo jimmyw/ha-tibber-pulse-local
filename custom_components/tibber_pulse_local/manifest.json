@@ -13,6 +13,10 @@
     {
       "type": "_http._tcp.local.",
       "name": "tibber bridge*"
+    },
+    {
+      "type": "_http._tcp.local.",
+      "name": "pulse p1*"
     }
   ]
 }

@@ -3,7 +3,7 @@
     "flow_title": "{name}",
     "step": {
       "user": {
-        "description": "Connect to a Tibber bridge on your network. It streams the readings its parser module decodes from your Pulse meters. Enter its web password or an API token.",
+        "description": "Connect to a Tibber Bridge or Pulse P1 on your network. It streams the readings its parser module decodes from your Pulse meters. Enter its web password or an API token.",
         "data": {
           "host": "Host",
           "password": "Password",
@@ -16,7 +16,7 @@
         }
       },
       "zeroconf_confirm": {
-        "description": "A Tibber bridge was found at {host}. Enter its web password or an API token to add it.",
+        "description": "A {model} was found at {host}. Enter its web password or an API token to add it.",
         "data": {
           "password": "Password",
           "api_token": "API token"

@@ -1,6 +1,12 @@
 """The Tibber Pulse (local) integration: meter readings from a Tibber bridge's /ws stream."""
 
-from homeassistant.const import CONF_API_TOKEN, CONF_HOST, CONF_PASSWORD, Platform
+from homeassistant.const import (
+    CONF_API_TOKEN,
+    CONF_HOST,
+    CONF_MODEL,
+    CONF_PASSWORD,
+    Platform,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
@@ -39,7 +45,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: TibberPulseConfigEntry) 
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, bridge.bridge_id)},
         manufacturer=MANUFACTURER,
-        model=BRIDGE_MODEL,
+        model=entry.data.get(CONF_MODEL, BRIDGE_MODEL),
         name=entry.title,
         sw_version=firmware.get("esp"),
         configuration_url=bridge.client.base_url,

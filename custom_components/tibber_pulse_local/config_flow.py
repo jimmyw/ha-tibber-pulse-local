@@ -7,12 +7,12 @@ from typing import Any
 import voluptuous as vol  # noqa: TID251  # probatio is too new for older cores
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
-from homeassistant.const import CONF_API_TOKEN, CONF_HOST, CONF_PASSWORD
+from homeassistant.const import CONF_API_TOKEN, CONF_HOST, CONF_MODEL, CONF_PASSWORD
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .client import TibberPulseAuthError, TibberPulseClient, TibberPulseConnectionError
-from .const import DOMAIN, LOGGER, ZEROCONF_HOST_PREFIX
+from .const import BRIDGE_MODEL, DOMAIN, LOGGER, ZEROCONF_PRODUCTS
 
 
 # The web password or an API token: exactly one of them
@@ -44,6 +44,7 @@ class TibberPulseConfigFlow(ConfigFlow, domain=DOMAIN):
 
     _host: str | None = None
     _discovered_id: str | None = None
+    _model: str = BRIDGE_MODEL
 
     async def _async_try(
         self, host: str, credentials: dict[str, str] | None
@@ -96,7 +97,13 @@ class TibberPulseConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_zeroconf(
         self, discovery_info: ZeroconfServiceInfo
     ) -> ConfigFlowResult:
-        """Handle a bridge found over mDNS (its web server, "Tibber Bridge Web Server")."""
+        """Handle a bridge found over mDNS, by its web server ("Tibber Bridge Web Server")."""
+        service = discovery_info.name.lower()
+        product = next(
+            (p for p in ZEROCONF_PRODUCTS if service.startswith(p.service_prefix)),
+            ZEROCONF_PRODUCTS[0],
+        )
+        self._model = product.model
         hostname = (
             discovery_info.hostname.lower().removesuffix(".").removesuffix(".local")
         )
@@ -104,14 +111,15 @@ class TibberPulseConfigFlow(ConfigFlow, domain=DOMAIN):
         # The default host name carries the last 8 hex digits of the device id, the
         # unique id. The host name is a setting, though: a renamed bridge is known by
         # its address until it tells its device id.
-        suffix = hostname.removeprefix(ZEROCONF_HOST_PREFIX)
-        if hostname.startswith(ZEROCONF_HOST_PREFIX) and re.fullmatch(
+        suffix = hostname.removeprefix(product.host_prefix)
+        if hostname.startswith(product.host_prefix) and re.fullmatch(
             "[0-9a-f]{8}", suffix
         ):
             for entry in self._async_current_entries(include_ignore=True):
                 if entry.unique_id and entry.unique_id.endswith(suffix):
                     self.hass.config_entries.async_update_entry(
-                        entry, data={**entry.data, CONF_HOST: host}
+                        entry,
+                        data={**entry.data, CONF_HOST: host, CONF_MODEL: self._model},
                     )
                     return self.async_abort(reason="already_configured")
             self._discovered_id = suffix
@@ -122,7 +130,7 @@ class TibberPulseConfigFlow(ConfigFlow, domain=DOMAIN):
         self._abort_if_unique_id_configured()
         self._host = host
         self.context["title_placeholders"] = {
-            "name": f"Tibber Bridge {self._discovered_id}"
+            "name": f"{self._model} {self._discovered_id}"
         }
         return await self.async_step_zeroconf_confirm()
 
@@ -140,15 +148,21 @@ class TibberPulseConfigFlow(ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(
                     device_id or self._discovered_id, raise_on_progress=False
                 )
-                self._abort_if_unique_id_configured(updates={CONF_HOST: self._host})
+                self._abort_if_unique_id_configured(
+                    updates={CONF_HOST: self._host, CONF_MODEL: self._model}
+                )
                 return self.async_create_entry(
-                    title=f"Tibber Bridge {device_id or self._discovered_id}",
-                    data={CONF_HOST: self._host, **credentials},
+                    title=f"{self._model} {device_id or self._discovered_id}",
+                    data={
+                        CONF_HOST: self._host,
+                        CONF_MODEL: self._model,
+                        **credentials,
+                    },
                 )
         return self.async_show_form(
             step_id="zeroconf_confirm",
             data_schema=CREDENTIALS_SCHEMA,
-            description_placeholders={"host": self._host},
+            description_placeholders={"host": self._host, "model": self._model},
             errors=errors,
         )
 

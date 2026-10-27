@@ -14,7 +14,13 @@ from custom_components.tibber_pulse_local.diagnostics import (
     async_get_config_entry_diagnostics,
 )
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
-from homeassistant.const import CONF_API_TOKEN, CONF_HOST, STATE_UNAVAILABLE
+from homeassistant.const import (
+    CONF_API_TOKEN,
+    CONF_HOST,
+    CONF_MODEL,
+    CONF_PASSWORD,
+    STATE_UNAVAILABLE,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 import homeassistant.util.dt as dt_util
@@ -22,6 +28,7 @@ import homeassistant.util.dt as dt_util
 from .conftest import (  # noqa: TID251
     DEVICE_ID,
     EUID,
+    PASSWORD,
     READING,
     STREAM_TOKEN,
     FakeBridge,
@@ -227,3 +234,22 @@ async def test_token_removed_while_running(
             for flow in hass.config_entries.flow.async_progress_by_handler(DOMAIN)
         )
     )
+
+
+async def test_pulse_p1_device(hass: HomeAssistant, bridge: FakeBridge) -> None:
+    """A Pulse P1's device carries its model."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=DEVICE_ID,
+        data={
+            CONF_HOST: bridge.host,
+            CONF_MODEL: "Pulse P1",
+            CONF_PASSWORD: PASSWORD,
+        },
+    )
+    await setup_entry(hass, entry)
+    device = dr.async_get(hass).async_get_device_by_identifier(
+        (DOMAIN, DEVICE_ID), entry.entry_id
+    )
+    assert device is not None
+    assert device.model == "Pulse P1"

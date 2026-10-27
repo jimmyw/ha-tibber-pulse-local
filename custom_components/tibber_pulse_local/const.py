@@ -1,5 +1,6 @@
 """Constants for the Tibber Pulse (local) integration."""
 
+from dataclasses import dataclass
 import logging
 
 DOMAIN = "tibber_pulse_local"
@@ -7,8 +8,23 @@ LOGGER = logging.getLogger(__package__)
 
 MANUFACTURER = "Tibber"
 BRIDGE_MODEL = "Tibber Bridge"
-# The bridge's mDNS host name is "Bridge" plus the last 8 hex digits of its device id
-ZEROCONF_HOST_PREFIX = "bridge"
+P1_MODEL = "Pulse P1"
+
+
+@dataclass(frozen=True, slots=True)
+class ZeroconfProduct:
+    """A product found by the name of the web server it advertises over mDNS."""
+
+    service_prefix: str  # Of the lower-case service instance name
+    host_prefix: str  # Of the default host name, before 8 hex digits of the device id
+    model: str
+
+
+# Same firmware, built for each product: the manifest matches both service names
+ZEROCONF_PRODUCTS = (
+    ZeroconfProduct("tibber bridge", "bridge", BRIDGE_MODEL),
+    ZeroconfProduct("pulse p1", "pulse", P1_MODEL),
+)
 
 # A meter is unavailable when no reading came for this many reading intervals,
 # and never sooner than STALE_MIN_SECONDS
