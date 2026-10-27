@@ -34,7 +34,7 @@ class TibberPulseError(Exception):
 
 
 class TibberPulseAuthError(TibberPulseError):
-    """The bridge refused the password."""
+    """The bridge refused the password or API token."""
 
 
 class TibberPulseConnectionError(TibberPulseError):
@@ -53,6 +53,11 @@ def auth_header(password: str) -> dict[str, str]:
     """Return the Authorization header for the bridge's web password."""
     token = base64.b64encode(f"{AUTH_USER}:{password}".encode()).decode()
     return {"Authorization": f"Basic {token}"}
+
+
+def bearer_header(api_token: str) -> dict[str, str]:
+    """Return the Authorization header for an API token."""
+    return {"Authorization": f"Bearer {api_token}"}
 
 
 def parse_message(message: str | bytes) -> Reading | None:
@@ -90,15 +95,19 @@ class TibberPulseClient:
         self,
         session: aiohttp.ClientSession,
         host: str,
-        password: str,
+        password: str | None,
         on_reading: Callable[[Reading], None],
         on_connection: Callable[[bool], None] | None = None,
         on_auth_failed: Callable[[], None] | None = None,
+        api_token: str | None = None,
     ) -> None:
-        """Initialize the client."""
+        """Initialize the client, with the web password or an API token."""
         self._session = session
         self._host = host
-        self._password = password
+        self._api_token = api_token
+        self._headers = (
+            bearer_header(api_token) if api_token else auth_header(password or "")
+        )
         self._on_reading = on_reading
         self._on_connection = on_connection
         self._on_auth_failed = on_auth_failed
@@ -110,7 +119,7 @@ class TibberPulseClient:
         return f"http://{self._host}"
 
     async def async_validate(self) -> None:
-        """Open /ws once to check that the bridge answers and accepts the password."""
+        """Open /ws once to check that the bridge answers and accepts the credential."""
         ws = await self._connect()
         await ws.close()
 
@@ -134,7 +143,7 @@ class TibberPulseClient:
         return status if isinstance(status, dict) else None
 
     async def run(self) -> None:
-        """Stream readings until cancelled or the password is refused."""
+        """Stream readings until cancelled or the credential is refused."""
         backoff = BACKOFF_MIN
         loop = asyncio.get_running_loop()
         while True:
@@ -142,7 +151,7 @@ class TibberPulseClient:
             try:
                 ws = await self._connect()
             except TibberPulseAuthError:
-                _LOGGER.error("Bridge %s refused the password", self._host)
+                _LOGGER.error("Bridge %s refused the credential", self._host)
                 if self._on_auth_failed:
                     self._on_auth_failed()
                 return
@@ -165,7 +174,7 @@ class TibberPulseClient:
             return await self._session.ws_connect(
                 f"{self.base_url}{WS_PATH}",
                 params={"kind": "reading"},
-                headers=auth_header(self._password),
+                headers=self._headers,
                 heartbeat=HEARTBEAT,
             )
         except aiohttp.WSServerHandshakeError as err:
@@ -193,7 +202,7 @@ class TibberPulseClient:
         try:
             async with self._session.get(
                 f"{self.base_url}{path}",
-                headers=auth_header(self._password),
+                headers=self._headers,
                 timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT),
             ) as resp:
                 status = resp.status
@@ -202,6 +211,10 @@ class TibberPulseClient:
             _LOGGER.debug("GET %s from %s failed: %s", path, self._host, err)
             return None
         if status == 401:
+            # A token opens only its scopes: a stream token gets /ws and nothing else
+            if self._api_token:
+                _LOGGER.debug("The API token does not open %s on %s", path, self._host)
+                return None
             raise TibberPulseAuthError
         return body
 

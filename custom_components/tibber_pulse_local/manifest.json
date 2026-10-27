@@ -8,7 +8,7 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/jimmyw/ha-tibber-pulse-local/issues",
   "requirements": [],
-  "version": "0.1.0",
+  "version": "0.2.0",
   "zeroconf": [
     {
       "type": "_http._tcp.local.",

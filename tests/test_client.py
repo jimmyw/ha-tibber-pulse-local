@@ -1,6 +1,10 @@
 """Tests for parsing the bridge's /ws messages."""
 
-from custom_components.tibber_pulse_local.client import auth_header, parse_message
+from custom_components.tibber_pulse_local.client import (
+    auth_header,
+    bearer_header,
+    parse_message,
+)
 
 from .conftest import EUID, READING, message  # noqa: TID251
 
@@ -42,3 +46,8 @@ def test_parse_malformed() -> None:
 def test_auth_header() -> None:
     """The bridge takes any user name, the password is what counts."""
     assert auth_header("TEST-PASS") == {"Authorization": "Basic eDpURVNULVBBU1M="}
+
+
+def test_bearer_header() -> None:
+    """An API token goes as a Bearer token."""
+    assert bearer_header("abc") == {"Authorization": "Bearer abc"}

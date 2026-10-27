@@ -1,7 +1,7 @@
 # ruff: noqa: INP001, T201  (a command-line tool, not part of the integration)
 """Stream readings from a real bridge with the integration's client, for a while.
 
-Usage: python scripts/smoke.py <host> <password> [seconds]
+Usage: python scripts/smoke.py [--token] <host> <password or API token> [seconds]
 """
 
 import asyncio
@@ -17,7 +17,7 @@ sys.path.insert(
 from client import Reading, TibberPulseClient
 
 
-async def main(host: str, password: str, seconds: float) -> None:
+async def main(host: str, credential: str, token: bool, seconds: float) -> None:
     """Connect, print each reading and connection change, then stop."""
 
     def on_reading(reading: Reading) -> None:
@@ -32,10 +32,11 @@ async def main(host: str, password: str, seconds: float) -> None:
         client = TibberPulseClient(
             session,
             host,
-            password,
+            None if token else credential,
             on_reading,
             on_connection=lambda up: print("stream", "up" if up else "down"),
-            on_auth_failed=lambda: print("password refused"),
+            on_auth_failed=lambda: print("credential refused"),
+            api_token=credential if token else None,
         )
         await client.async_validate()
         print("device id", await client.async_get_device_id())
@@ -46,6 +47,8 @@ async def main(host: str, password: str, seconds: float) -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(
-        main(sys.argv[1], sys.argv[2], float(sys.argv[3]) if len(sys.argv) > 3 else 30)
-    )
+    args = sys.argv[1:]
+    token = "--token" in args
+    if token:
+        args.remove("--token")
+    asyncio.run(main(args[0], args[1], token, float(args[2]) if len(args) > 2 else 30))

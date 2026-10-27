@@ -18,6 +18,9 @@ from homeassistant.const import CONF_HOST, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 
 PASSWORD = "TEST-PASS"
+# API tokens: one opening /ws only, one opening everything like the password
+STREAM_TOKEN = "c3RyZWFtLXRva2VuLWZvci10"
+FULL_TOKEN = "ZnVsbC10b2tlbi1mb3ItdGVz"
 DEVICE_ID = "0123456789ab"
 EUID = "00112233445566aa"
 
@@ -60,6 +63,10 @@ class FakeBridge:
     def __init__(self) -> None:
         """Initialize the fake bridge."""
         self.password = PASSWORD
+        self.tokens: dict[str, set[str]] = {
+            STREAM_TOKEN: {"stream"},
+            FULL_TOKEN: {"auth", "stream"},
+        }
         self.readings: list[dict[str, Any]] = [copy.deepcopy(READING)]
         self.close_after_send = False
         self.connections = 0
@@ -73,13 +80,17 @@ class FakeBridge:
         assert self.server is not None
         return f"{self.server.host}:{self.server.port}"
 
-    def _authorized(self, request: web.Request) -> bool:
+    def _authorized(self, request: web.Request, scope: str = "auth") -> bool:
+        """Check the password (every scope) or a Bearer token holding `scope`."""
+        header = request.headers.get("Authorization", "")
+        if header.startswith("Bearer "):
+            return scope in self.tokens.get(header.removeprefix("Bearer "), set())
         expected = base64.b64encode(f"x:{self.password}".encode()).decode()
-        return request.headers.get("Authorization") == f"Basic {expected}"
+        return header == f"Basic {expected}"
 
     async def ws(self, request: web.Request) -> web.StreamResponse:
         """Serve /ws: send the queued readings, then keep the socket open."""
-        if not self._authorized(request):
+        if not self._authorized(request, "stream"):
             return web.Response(status=401)
         self.connections += 1
         self.queries.append(dict(request.query))

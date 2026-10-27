@@ -1,6 +1,6 @@
 """The Tibber Pulse (local) integration: meter readings from a Tibber bridge's /ws stream."""
 
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, Platform
+from homeassistant.const import CONF_API_TOKEN, CONF_HOST, CONF_PASSWORD, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
@@ -18,14 +18,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: TibberPulseConfigEntry) 
         hass,
         entry,
         entry.data[CONF_HOST],
-        entry.data[CONF_PASSWORD],
+        entry.data.get(CONF_PASSWORD),
+        entry.data.get(CONF_API_TOKEN),
         entry.unique_id or entry.entry_id,
     )
     try:
         await bridge.client.async_validate()
         bridge.status = await bridge.client.async_get_status()
     except TibberPulseAuthError as err:
-        raise ConfigEntryAuthFailed("The bridge refused the password") from err
+        raise ConfigEntryAuthFailed(
+            "The bridge refused the password or API token"
+        ) from err
     except TibberPulseConnectionError as err:
         raise ConfigEntryNotReady(
             f"Cannot connect to {entry.data[CONF_HOST]}: {err}"

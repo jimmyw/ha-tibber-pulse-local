@@ -3,12 +3,20 @@
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
-from homeassistant.const import CONF_HOST, CONF_PASSWORD
+from homeassistant.const import CONF_API_TOKEN, CONF_HOST, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 
 from .bridge import TibberPulseConfigEntry
 
-TO_REDACT = {CONF_HOST, CONF_PASSWORD, "meter_id", "ip", "ssid", "bssid"}
+TO_REDACT = {
+    CONF_API_TOKEN,
+    CONF_HOST,
+    CONF_PASSWORD,
+    "meter_id",
+    "ip",
+    "ssid",
+    "bssid",
+}
 
 
 async def async_get_config_entry_diagnostics(

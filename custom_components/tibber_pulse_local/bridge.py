@@ -49,7 +49,8 @@ class TibberPulseBridge:
         hass: HomeAssistant,
         entry: TibberPulseConfigEntry,
         host: str,
-        password: str,
+        password: str | None,
+        api_token: str | None,
         bridge_id: str,
     ) -> None:
         """Initialize the bridge."""
@@ -65,6 +66,7 @@ class TibberPulseBridge:
             on_reading=self._on_reading,
             on_connection=self._on_connection,
             on_auth_failed=self._on_auth_failed,
+            api_token=api_token,
         )
         self._unsub_check: CALLBACK_TYPE | None = None
 

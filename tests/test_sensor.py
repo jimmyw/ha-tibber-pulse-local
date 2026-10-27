@@ -14,7 +14,7 @@ from custom_components.tibber_pulse_local.diagnostics import (
     async_get_config_entry_diagnostics,
 )
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
-from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.const import CONF_API_TOKEN, CONF_HOST, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 import homeassistant.util.dt as dt_util
@@ -23,6 +23,7 @@ from .conftest import (  # noqa: TID251
     DEVICE_ID,
     EUID,
     READING,
+    STREAM_TOKEN,
     FakeBridge,
     setup_entry,
     wait_for,
@@ -191,3 +192,38 @@ async def test_diagnostics(
     assert diagnostics["entry"]["host"] == "**REDACTED**"
     assert diagnostics["connected"] is True
     assert diagnostics["meters"][EUID]["reading"]["e_import_wh"] == 2282950
+
+
+async def test_stream_token(hass: HomeAssistant, bridge: FakeBridge) -> None:
+    """A stream token streams readings, without the pages only the password opens."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=bridge.host,
+        data={CONF_HOST: bridge.host, CONF_API_TOKEN: STREAM_TOKEN},
+    )
+    await setup_entry(hass, entry)
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.runtime_data.status is None
+    assert float(hass.states.get(_entity_id(hass, "voltage_l1")).state) == 231.0
+    diagnostics = await async_get_config_entry_diagnostics(hass, entry)
+    assert diagnostics["entry"]["api_token"] == "**REDACTED**"
+
+
+async def test_token_removed_while_running(
+    hass: HomeAssistant, bridge: FakeBridge
+) -> None:
+    """A token removed on the bridge starts a re-auth flow."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=bridge.host,
+        data={CONF_HOST: bridge.host, CONF_API_TOKEN: STREAM_TOKEN},
+    )
+    await setup_entry(hass, entry)
+    del bridge.tokens[STREAM_TOKEN]
+    await bridge.kick()
+    await wait_for(
+        lambda: any(
+            flow["context"]["source"] == SOURCE_REAUTH
+            for flow in hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+        )
+    )

@@ -3,36 +3,43 @@
     "flow_title": "{name}",
     "step": {
       "user": {
-        "description": "Connect to a Tibber bridge on your network. It streams the readings its parser module decodes from your Pulse meters.",
+        "description": "Connect to a Tibber bridge on your network. It streams the readings its parser module decodes from your Pulse meters. Enter its web password or an API token.",
         "data": {
           "host": "Host",
-          "password": "Password"
+          "password": "Password",
+          "api_token": "API token"
         },
         "data_description": {
           "host": "The bridge's IP address or host name.",
-          "password": "The bridge's web password: the code on its QR label, like ABCD-1234."
+          "password": "The bridge's web password: the code on its QR label, like ABCD-1234. Leave empty when you use an API token.",
+          "api_token": "An API token with the stream scope, from the API tokens page of the bridge's web interface. Use it instead of the password."
         }
       },
       "zeroconf_confirm": {
-        "description": "A Tibber bridge was found at {host}. Enter its web password to add it.",
+        "description": "A Tibber bridge was found at {host}. Enter its web password or an API token to add it.",
         "data": {
-          "password": "Password"
+          "password": "Password",
+          "api_token": "API token"
         },
         "data_description": {
-          "password": "The code on the bridge's QR label, like ABCD-1234."
+          "password": "The bridge's web password: the code on its QR label, like ABCD-1234. Leave empty when you use an API token.",
+          "api_token": "An API token with the stream scope, from the API tokens page of the bridge's web interface. Use it instead of the password."
         }
       },
       "reauth_confirm": {
-        "description": "The bridge at {host} no longer accepts the password. Enter the current one.",
+        "description": "The bridge at {host} no longer accepts the password or API token. Enter the current password, or a new API token.",
         "data": {
-          "password": "Password"
+          "password": "Password",
+          "api_token": "API token"
         },
         "data_description": {
-          "password": "The code on the bridge's QR label, like ABCD-1234."
+          "password": "The bridge's web password: the code on its QR label, like ABCD-1234. Leave empty when you use an API token.",
+          "api_token": "An API token with the stream scope, from the API tokens page of the bridge's web interface. Use it instead of the password."
         }
       }
     },
     "error": {
+      "credentials": "Enter either the web password or an API token, not both.",
       "cannot_connect": "Failed to connect",
       "invalid_auth": "Invalid authentication",
       "unknown": "Unexpected error"
