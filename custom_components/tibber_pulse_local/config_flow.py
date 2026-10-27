@@ -1,6 +1,7 @@
 """Config flow for Tibber Pulse (local)."""
 
 from collections.abc import Mapping
+import re
 from typing import Any
 
 import voluptuous as vol  # noqa: TID251  # probatio is too new for older cores
@@ -42,7 +43,7 @@ class TibberPulseConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     _host: str | None = None
-    _discovered_suffix: str | None = None
+    _discovered_id: str | None = None
 
     async def _async_try(
         self, host: str, credentials: dict[str, str] | None
@@ -99,22 +100,30 @@ class TibberPulseConfigFlow(ConfigFlow, domain=DOMAIN):
         hostname = (
             discovery_info.hostname.lower().removesuffix(".").removesuffix(".local")
         )
-        if not hostname.startswith(ZEROCONF_HOST_PREFIX):
-            return self.async_abort(reason="not_tibber_bridge")
-        # The host name carries the last 8 hex digits of the device id, the unique id
-        suffix = hostname.removeprefix(ZEROCONF_HOST_PREFIX)
         host = str(discovery_info.ip_address)
-        for entry in self._async_current_entries(include_ignore=True):
-            if entry.unique_id and entry.unique_id.endswith(suffix):
-                self.hass.config_entries.async_update_entry(
-                    entry, data={**entry.data, CONF_HOST: host}
-                )
-                return self.async_abort(reason="already_configured")
-        await self.async_set_unique_id(suffix)
+        # The default host name carries the last 8 hex digits of the device id, the
+        # unique id. The host name is a setting, though: a renamed bridge is known by
+        # its address until it tells its device id.
+        suffix = hostname.removeprefix(ZEROCONF_HOST_PREFIX)
+        if hostname.startswith(ZEROCONF_HOST_PREFIX) and re.fullmatch(
+            "[0-9a-f]{8}", suffix
+        ):
+            for entry in self._async_current_entries(include_ignore=True):
+                if entry.unique_id and entry.unique_id.endswith(suffix):
+                    self.hass.config_entries.async_update_entry(
+                        entry, data={**entry.data, CONF_HOST: host}
+                    )
+                    return self.async_abort(reason="already_configured")
+            self._discovered_id = suffix
+        else:
+            self._async_abort_entries_match({CONF_HOST: host})
+            self._discovered_id = host
+        await self.async_set_unique_id(self._discovered_id)
         self._abort_if_unique_id_configured()
         self._host = host
-        self._discovered_suffix = suffix
-        self.context["title_placeholders"] = {"name": f"Tibber Bridge {suffix}"}
+        self.context["title_placeholders"] = {
+            "name": f"Tibber Bridge {self._discovered_id}"
+        }
         return await self.async_step_zeroconf_confirm()
 
     async def async_step_zeroconf_confirm(
@@ -129,11 +138,11 @@ class TibberPulseConfigFlow(ConfigFlow, domain=DOMAIN):
             if not errors:
                 # Replace the placeholder unique id with the full device id
                 await self.async_set_unique_id(
-                    device_id or self._discovered_suffix, raise_on_progress=False
+                    device_id or self._discovered_id, raise_on_progress=False
                 )
                 self._abort_if_unique_id_configured(updates={CONF_HOST: self._host})
                 return self.async_create_entry(
-                    title=f"Tibber Bridge {device_id or self._discovered_suffix}",
+                    title=f"Tibber Bridge {device_id or self._discovered_id}",
                     data={CONF_HOST: self._host, **credentials},
                 )
         return self.async_show_form(

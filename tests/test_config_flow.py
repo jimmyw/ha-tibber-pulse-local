@@ -1,6 +1,9 @@
 """Tests for the Tibber Pulse (local) config flow."""
 
+from fnmatch import fnmatch
 from ipaddress import ip_address
+import json
+from pathlib import Path
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -18,6 +21,8 @@ from .conftest import (  # noqa: TID251
     STREAM_TOKEN,
     FakeBridge,
 )
+
+MANIFEST = "custom_components/tibber_pulse_local/manifest.json"
 
 
 async def test_user_flow(hass: HomeAssistant, bridge: FakeBridge) -> None:
@@ -206,15 +211,50 @@ async def test_zeroconf_known_bridge_updates_host(hass: HomeAssistant) -> None:
     assert entry.data[CONF_HOST] == "127.0.0.1"
 
 
-async def test_zeroconf_not_a_bridge(hass: HomeAssistant) -> None:
-    """Another device's web server is ignored."""
+async def test_zeroconf_renamed_bridge(hass: HomeAssistant, bridge: FakeBridge) -> None:
+    """A bridge with a host name of its own is known by its device id once added."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": config_entries.SOURCE_ZEROCONF},
-        data=_zeroconf("printer.local."),
+        data=_zeroconf("kitchen.local."),
+    )
+    assert result["step_id"] == "zeroconf_confirm"
+    flow = hass.config_entries.flow._progress[result["flow_id"]]  # noqa: SLF001
+    assert flow.unique_id == "127.0.0.1"
+    flow._host = bridge.host  # noqa: SLF001
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_PASSWORD: PASSWORD}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["result"].unique_id == DEVICE_ID
+
+
+async def test_zeroconf_renamed_known_address(hass: HomeAssistant) -> None:
+    """A renamed bridge at a configured address is not offered again."""
+    MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=DEVICE_ID,
+        data={CONF_HOST: "127.0.0.1", CONF_PASSWORD: PASSWORD},
+    ).add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_ZEROCONF},
+        data=_zeroconf("bridge_kitchen.local."),
     )
     assert result["type"] is FlowResultType.ABORT
-    assert result["reason"] == "not_tibber_bridge"
+    assert result["reason"] == "already_configured"
+
+
+def test_zeroconf_matcher() -> None:
+    """The manifest matches the web server a bridge advertises, and nothing else."""
+    manifest = json.loads(
+        (Path(__file__).parents[1] / MANIFEST).read_text(encoding="utf-8")
+    )
+    [matcher] = manifest["zeroconf"]
+    assert matcher["type"] == "_http._tcp.local."
+    # As a bridge on a LAN advertised itself (avahi-browse -r _http._tcp)
+    assert fnmatch("tibber bridge web server._http._tcp.local.", matcher["name"])
+    assert not fnmatch("pulse p1 web server._http._tcp.local.", matcher["name"])
 
 
 async def test_reauth(
