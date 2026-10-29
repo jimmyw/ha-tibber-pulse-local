@@ -20,7 +20,13 @@ class ZeroconfProduct:
     model: str
 
 
-# Same firmware, built for each product: the manifest matches both service names
+# The meter stream's own service, found whatever the host or service name. Its TXT record
+# carries the device id ("id") and the product ("model": "bridge" or "p1").
+ZEROCONF_PULSE_TYPE = "_tibber-pulse._tcp.local."
+ZEROCONF_PULSE_MODELS = {"bridge": BRIDGE_MODEL, "p1": P1_MODEL}
+
+# Firmware without that service is found by its web server. Same firmware, built for each
+# product: the manifest matches both service names.
 ZEROCONF_PRODUCTS = (
     ZeroconfProduct("tibber bridge", "bridge", BRIDGE_MODEL),
     ZeroconfProduct("pulse p1", "pulse", P1_MODEL),

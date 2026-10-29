@@ -12,7 +12,14 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .client import TibberPulseAuthError, TibberPulseClient, TibberPulseConnectionError
-from .const import BRIDGE_MODEL, DOMAIN, LOGGER, ZEROCONF_PRODUCTS
+from .const import (
+    BRIDGE_MODEL,
+    DOMAIN,
+    LOGGER,
+    ZEROCONF_PRODUCTS,
+    ZEROCONF_PULSE_MODELS,
+    ZEROCONF_PULSE_TYPE,
+)
 
 
 # The web password or an API token: exactly one of them
@@ -97,7 +104,18 @@ class TibberPulseConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_zeroconf(
         self, discovery_info: ZeroconfServiceInfo
     ) -> ConfigFlowResult:
-        """Handle a bridge found over mDNS, by its web server ("Tibber Bridge Web Server")."""
+        """Handle a bridge found over mDNS, by its stream service or its web server."""
+        host = str(discovery_info.ip_address)
+        self.context[CONF_HOST] = host
+        if discovery_info.type == ZEROCONF_PULSE_TYPE:
+            return await self._async_step_zeroconf_pulse(discovery_info, host)
+        # Newer firmware advertises both: its stream service tells the device id
+        for flow in self._async_in_progress(include_uninitialized=True):
+            if (
+                flow["context"].get(CONF_HOST) == host
+                and flow["context"].get("zeroconf_type") == ZEROCONF_PULSE_TYPE
+            ):
+                return self.async_abort(reason="already_in_progress")
         service = discovery_info.name.lower()
         product = next(
             (p for p in ZEROCONF_PRODUCTS if service.startswith(p.service_prefix)),
@@ -107,7 +125,6 @@ class TibberPulseConfigFlow(ConfigFlow, domain=DOMAIN):
         hostname = (
             discovery_info.hostname.lower().removesuffix(".").removesuffix(".local")
         )
-        host = str(discovery_info.ip_address)
         # The default host name carries the last 8 hex digits of the device id, the
         # unique id. The host name is a setting, though: a renamed bridge is known by
         # its address until it tells its device id.
@@ -128,6 +145,41 @@ class TibberPulseConfigFlow(ConfigFlow, domain=DOMAIN):
             self._discovered_id = host
         await self.async_set_unique_id(self._discovered_id)
         self._abort_if_unique_id_configured()
+        return await self._async_discovered(host)
+
+    async def _async_step_zeroconf_pulse(
+        self, discovery_info: ZeroconfServiceInfo, host: str
+    ) -> ConfigFlowResult:
+        """Handle a bridge found by its stream service, which tells its device id."""
+        device_id = str(discovery_info.properties.get("id") or "").lower()
+        if not re.fullmatch("[0-9a-f]+", device_id):
+            return self.async_abort(reason="not_tibber_bridge")
+        self.context["zeroconf_type"] = ZEROCONF_PULSE_TYPE
+        self._model = ZEROCONF_PULSE_MODELS.get(
+            str(discovery_info.properties.get("model")), BRIDGE_MODEL
+        )
+        # Entries discovered before keep the id they were found by: the host name's
+        # last 8 hex digits, or the address of a renamed bridge
+        for entry in self._async_current_entries(include_ignore=True):
+            if entry.unique_id in (device_id, device_id[-8:], host):
+                self.hass.config_entries.async_update_entry(
+                    entry,
+                    unique_id=device_id,
+                    data={**entry.data, CONF_HOST: host, CONF_MODEL: self._model},
+                )
+                return self.async_abort(reason="already_configured")
+        # The same bridge found by its web server first
+        for flow in self._async_in_progress(include_uninitialized=True):
+            if flow["context"].get(CONF_HOST) == host:
+                self.hass.config_entries.flow.async_abort(flow["flow_id"])
+        self._discovered_id = device_id
+        await self.async_set_unique_id(device_id)
+        self._abort_if_unique_id_configured(
+            updates={CONF_HOST: host, CONF_MODEL: self._model}
+        )
+        return await self._async_discovered(host)
+
+    async def _async_discovered(self, host: str) -> ConfigFlowResult:
         self._host = host
         self.context["title_placeholders"] = {
             "name": f"{self._model} {self._discovered_id}"

@@ -292,17 +292,136 @@ async def test_zeroconf_renamed_known_address(hass: HomeAssistant) -> None:
     assert result["reason"] == "already_configured"
 
 
+def _zeroconf_pulse(
+    hostname: str = "kitchen.local.", properties: dict[str, str] | None = None
+) -> ZeroconfServiceInfo:
+    return ZeroconfServiceInfo(
+        ip_address=ip_address("127.0.0.1"),
+        ip_addresses=[ip_address("127.0.0.1")],
+        hostname=hostname,
+        name="Tibber Bridge._tibber-pulse._tcp.local.",
+        port=80,
+        type="_tibber-pulse._tcp.local.",
+        properties=(
+            {"id": DEVICE_ID, "model": "bridge", "path": "/ws", "tls": "0"}
+            if properties is None
+            else properties
+        ),
+    )
+
+
+async def test_zeroconf_pulse_flow(hass: HomeAssistant, bridge: FakeBridge) -> None:
+    """The stream service finds a renamed bridge under its device id."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_ZEROCONF},
+        data=_zeroconf_pulse(),
+    )
+    assert result["step_id"] == "zeroconf_confirm"
+    flow = hass.config_entries.flow._progress[result["flow_id"]]  # noqa: SLF001
+    assert flow.unique_id == DEVICE_ID
+    flow._host = bridge.host  # noqa: SLF001
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_TOKEN: STREAM_TOKEN}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["result"].unique_id == DEVICE_ID
+    assert result["data"][CONF_MODEL] == "Tibber Bridge"
+
+
+async def test_zeroconf_pulse_p1(hass: HomeAssistant) -> None:
+    """The stream service tells a Pulse P1 by its model."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_ZEROCONF},
+        data=_zeroconf_pulse(properties={"id": DEVICE_ID, "model": "p1"}),
+    )
+    assert result["description_placeholders"]["model"] == "Pulse P1"
+
+
+async def test_zeroconf_pulse_without_id(hass: HomeAssistant) -> None:
+    """A stream service without a device id is not taken for a bridge."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_ZEROCONF},
+        data=_zeroconf_pulse(properties={}),
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "not_tibber_bridge"
+
+
+async def test_zeroconf_pulse_known_bridge_updates_host(hass: HomeAssistant) -> None:
+    """A configured bridge found by its stream service at a new address gets it."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=DEVICE_ID,
+        data={CONF_HOST: "1.2.3.4", CONF_PASSWORD: PASSWORD},
+    )
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_ZEROCONF},
+        data=_zeroconf_pulse(),
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert entry.data[CONF_HOST] == "127.0.0.1"
+
+
+async def test_zeroconf_pulse_adopts_older_ids(hass: HomeAssistant) -> None:
+    """Entries keyed by a host name suffix or an address move to the device id."""
+    by_suffix = MockConfigEntry(
+        domain=DOMAIN, unique_id=DEVICE_ID[-8:], data={CONF_HOST: "1.2.3.4"}
+    )
+    by_suffix.add_to_hass(hass)
+    await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_ZEROCONF},
+        data=_zeroconf_pulse(),
+    )
+    assert by_suffix.unique_id == DEVICE_ID
+    assert by_suffix.data[CONF_HOST] == "127.0.0.1"
+    await hass.config_entries.async_remove(by_suffix.entry_id)
+
+    by_host = MockConfigEntry(
+        domain=DOMAIN, unique_id="127.0.0.1", data={CONF_HOST: "127.0.0.1"}
+    )
+    by_host.add_to_hass(hass)
+    await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_ZEROCONF},
+        data=_zeroconf_pulse(),
+    )
+    assert by_host.unique_id == DEVICE_ID
+
+
+async def test_zeroconf_both_services_one_flow(hass: HomeAssistant) -> None:
+    """A bridge advertising both services is offered once, in either order."""
+    for first, second in (
+        (_zeroconf("kitchen.local."), _zeroconf_pulse()),
+        (_zeroconf_pulse(), _zeroconf("kitchen.local.")),
+    ):
+        for data in (first, second):
+            await hass.config_entries.flow.async_init(
+                DOMAIN, context={"source": config_entries.SOURCE_ZEROCONF}, data=data
+            )
+        flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+        assert [f["context"]["unique_id"] for f in flows] == [DEVICE_ID]
+        hass.config_entries.flow.async_abort(flows[0]["flow_id"])
+
+
 def test_zeroconf_matcher() -> None:
-    """The manifest matches the web servers a bridge and a Pulse P1 advertise."""
+    """The manifest matches the stream service, and the web servers older firmware advertises."""
     manifest = json.loads(
         (Path(__file__).parents[1] / MANIFEST).read_text(encoding="utf-8")
     )
-    assert {m["type"] for m in manifest["zeroconf"]} == {"_http._tcp.local."}
+    assert {"type": "_tibber-pulse._tcp.local."} in manifest["zeroconf"]
+    http = [m for m in manifest["zeroconf"] if m["type"] == "_http._tcp.local."]
 
     def matches(name: str) -> bool:
         # Home Assistant matches the lower-case service name
         name = f"{name}._http._tcp.local.".lower()
-        return any(fnmatch(name, m["name"]) for m in manifest["zeroconf"])
+        return any(fnmatch(name, m["name"]) for m in http)
 
     # As a bridge on a LAN advertised itself (avahi-browse -r _http._tcp)
     assert matches("Tibber Bridge Web Server")

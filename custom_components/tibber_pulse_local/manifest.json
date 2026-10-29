@@ -1,7 +1,9 @@
 {
   "domain": "tibber_pulse_local",
   "name": "Tibber Pulse (local)",
-  "codeowners": ["@jimmyw"],
+  "codeowners": [
+    "@jimmyw"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/jimmyw/ha-tibber-pulse-local",
   "integration_type": "hub",
@@ -10,6 +12,9 @@
   "requirements": [],
   "version": "0.2.0",
   "zeroconf": [
+    {
+      "type": "_tibber-pulse._tcp.local."
+    },
     {
       "type": "_http._tcp.local.",
       "name": "tibber bridge*"

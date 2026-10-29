@@ -28,11 +28,13 @@ Readings arrive as the meter sends them, typically every 2–10 seconds; nothing
    the two, leave the other empty). Bridges on the same network are also discovered over
    mDNS; then only the token or password is asked for.
 
-Discovery finds the bridge by the web server it advertises, `Tibber Bridge Web
-Server._http._tcp` (`Pulse P1 Web Server` on a Pulse P1), which it does while that server
-runs: with the web interface on, or with an API token on the bridge. Home Assistant follows
-a discovered bridge to a new IP address. Check what your bridge advertises with `avahi-browse -r _http._tcp` (Linux) or
-`dns-sd -B _http._tcp` (macOS).
+Discovery finds the bridge by its meter stream service, `_tibber-pulse._tcp`, whose TXT
+record carries the device id, so a bridge is found and recognised whatever its host name.
+Firmware without that service is found by its web server instead, `Tibber Bridge Web
+Server._http._tcp` (`Pulse P1 Web Server` on a Pulse P1). Either is advertised while the web
+server runs: with the web interface on, or with an API token on the bridge. Home Assistant
+follows a discovered bridge to a new IP address. Check what your bridge advertises with
+`avahi-browse -r _tibber-pulse._tcp` (Linux) or `dns-sd -B _tibber-pulse._tcp` (macOS).
 
 Manual install: copy `custom_components/tibber_pulse_local` into your Home Assistant
 `config/custom_components/` and restart.
