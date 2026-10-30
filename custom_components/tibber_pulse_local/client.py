@@ -17,7 +17,7 @@ _LOGGER = logging.getLogger(__name__)
 
 WS_PATH = "/ws"
 PARAMS_PATH = "/params.json"
-STATUS_PATH = "/status.json"
+STATUS_PATH = "/status.json?timeout=0"
 # Basic auth: the bridge checks the password only, any user name works
 AUTH_USER = "x"
 
